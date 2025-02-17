@@ -1,0 +1,57 @@
+{{- $fullname := (include "app.fullname" .) }}
+{{- $labels := (include "app.labels" .) }}
+
+{{/* use loop to generate configmaps with env variables for different workloads (api, migration job, cronjobs) */}}
+{{- $cronJobs := list }}
+{{- $w := dict }}
+{{- range keys .Values.cronJobs }}
+  {{- $cronJobs = printf "cronjob_%s" . | append $cronJobs }}
+{{- end }}
+{{- $workloads := list "api" "migration" | concat $cronJobs }}
+{{- range $wName := $workloads }}
+  {{- if hasPrefix "cronjob_" $wName }}
+    {{- $wName = trimPrefix "cronjob_" $wName }}
+    {{- $w = get $.Values.cronJobs $wName }}
+  {{- else }}
+    {{- $w = get $.Values $wName }}
+  {{- end }}
+  {{- if $w.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ $fullname }}-{{ $wName }}"
+  labels:
+{{ $labels | indent 4 }}
+  annotations:
+    helm.sh/hook: "pre-install, pre-upgrade"
+    helm.sh/hook-delete-policy: "before-hook-creation"
+    helm.sh/hook-weight: "-1"
+    meta.helm.sh/release-name: {{ $.Release.Name }}
+    meta.helm.sh/release-namespace: {{ $.Release.Namespace }}
+    kubernetes.io/description: Contains config values that will be injected
+data:
+  {{- range $key, $value := $w.envs }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  ENVIRONMENT: {{ $.Values.env | quote }}
+  VERSION: {{ $.Values.image.tag }}
+  {{- if $w.jvmOptions }}
+  JAVA_OPTS: {{ $w.jvmOptions | quote }}
+  {{- end }}
+  {{- if $w.externalSecrets.rollbarEnabled }}
+  SURPRISE_COMMONS_WEB_ROLLBAR_ENABLED: "true"
+  SURPRISE_COMMONS_WEB_ROLLBAR_ENVIRONMENT: "{{ $.Values.env }}"
+  SURPRISE_COMMONS_WEB_ROLLBAR_VERSION: "{{ $.Values.image.tag }}"
+  {{- end }}
+  {{- if $w.externalSecrets.redisEnabled }}
+  SPRING_REDIS_SSL: "true"
+  {{- end }}
+  {{- if $.Values.app.datadog.enabled }}
+  DD_SERVICE_MAPPING: "redis:{{ $fullname }}-redis,java-aws-sdk:{{ $fullname }}-aws-sdk,kafka:{{ $fullname }}-kafka"
+  DD_TRACE_DB_CLIENT_SPLIT_BY_INSTANCE: "true"
+  DD_DBM_PROPAGATION_MODE: "full"
+  {{- end }}
+{{- end }}
+{{- end }}
+

@@ -1,0 +1,43 @@
+{{- if .Values.migration.enabled }}
+{{- $fullname := (include "app.fullname" .) }}
+{{- $chart := (include "app.chart" .) }}
+{{- $envprefix := (include "app.envprefix" .) }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ $fullname }}-migrations"
+  labels:
+{{ include "app.labels" . | indent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "1"
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        component: "{{ $fullname }}-migrations"
+    spec:
+      {{- if or (.Values.app.nodeSelector) (.Values.migration.nodeSelectorOverride) }}
+      nodeSelector:
+        node.kubernetes.io/instance-group: {{ default .Values.app.nodeSelector .Values.migration.nodeSelectorOverride }}
+      {{- end }}
+      restartPolicy: Never
+      containers:
+      - name: "{{ $fullname }}-migrations"
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        command: ["java"]
+        {{- if .Values.migration.jvmOptions }}
+        args: ["$(JAVA_OPTS)", "org.springframework.boot.loader.JarLauncher", "migrate"]
+        {{- else }}
+        args: [ "org.springframework.boot.loader.JarLauncher", "migrate" ]
+        {{- end}}
+        envFrom:
+          - secretRef:
+              name: "{{ $fullname }}-migration-es"
+          - configMapRef:
+              name: "{{ $fullname }}-migration"
+{{- end }}

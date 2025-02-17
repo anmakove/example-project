@@ -1,0 +1,16 @@
+{{- $fullname := (include "app.fullname" .) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}
+  labels:
+{{ include "app.labels" . | indent 4 }}
+spec:
+  type: "{{ .Values.api.service.type }}"
+  ports:
+    - port: {{ .Values.api.service.port }}
+      targetPort:  {{ .Values.api.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+     app: "{{ $fullname }}"

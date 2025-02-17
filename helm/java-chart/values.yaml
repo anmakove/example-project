@@ -1,0 +1,240 @@
+# common Helm values for the chart
+env: dev
+
+projectType: java-service
+
+# global settings
+app:
+  nodeSelector: application
+  datadog:
+    enabled: false
+    libVersion: "v1.20.0"
+  gitRepositoryUrl:
+  gitCommitSHA:
+
+
+image:
+  repository: 0987654321.dkr.ecr.us-west-2.amazonaws.com/some-java-service
+  pullPolicy: IfNotPresent
+  tag: latest
+
+pdb:
+  enabled: true
+  minAvailable: "100%"
+
+serviceAccount:
+  # Specifies whether a ServiceAccount should be created
+  create: true
+  # The name of the ServiceAccount to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+  # The AWS role ARN to use.
+  # If not set, an annotation will be skipped
+  roleARN:
+
+  # clusterRole defines if cluster role is created and is connected to service account
+  # If name is not set and create is true, a name is generated using the fullname template
+  clusterRole:
+    create: false
+    roleName:
+    bindingName:
+    rules:
+      - apiGroups: [""]
+        resources: ["services", "pods", "endpoints"]
+        verbs: ["get", "watch", "list"]
+
+api:
+  enabled: true
+
+  # envs defines key-value map of environment variables
+  # envs:
+  #  SPRING_PROFILES_ACTIVE: aws
+  #  SYNC_HTTP_SERVICE_IMPL: "software.amazon.awssdk.http.apache.ApacheSdkHttpService"
+  envs:
+
+  externalSecrets:
+    refreshInterval: 15m
+    cognitoEnabled: false
+    intDbEnabled: false
+    intTokenEnabled: false
+    kafkaEnabled: false
+    redisEnabled: false
+    rollbarEnabled: false
+
+    # secretEnvs defines list of additional secrets for application with parameters:
+    #   key: services/{{ $.Values.env }}/core/{{ $fullname }}/{{ $item }}
+    #   property: {{ $item }}
+    #   secretKey: {{ $item }}
+    #
+    # secretEnvs:
+    #   - SECRET_1
+    #   - SECRET_2
+    secretEnvs:
+
+    # secretEnvsMap defines list of additional secrets maps for application with parameters:
+    # There are two types of key parameters: key or keyPath. Only one of them should be used at the same time for each item
+    # If 'key' is used
+    #   key: services/{{ $.Values.env }}/core/{{ $fullname }}/{{ $item.key }}
+    #   property: {{ $item.property }}
+    #   secretKey: {{ $item.secretKey}}
+    # If 'keyPath' is used
+    #   key: services/{{ $.Values.env }}/{{ $item.keyPath }}
+    #   property: {{ $item.property }}
+    #   secretKey: {{ $item.secretKey}}
+    #
+    # secretEnvsMap:
+    #   - key: db_details
+    #     property: friend_finder_url
+    #     secretKey: FRIEND_FINDER_POSTGRESQL_URL
+    #   - keyPath: common/core-docdb/db-details
+    #     property: cluster_endpoint
+    #     secretKey: DOCUMENTDB_HOST
+    secretEnvsMap:
+
+
+  # Custom options that are passed to the JVM when it is launched via JAVA_OPTS env var
+  jvmOptions: ""
+
+  replicaCount: 1
+
+  nameOverride: ""
+  fullnameOverride: ""
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+    scaleUpStabilizationWindowSeconds: 180
+    scaleDownStabilizationWindowSeconds: 180
+
+  nodeSelectorOverride: ""
+
+  tolerations: []
+
+  resources:
+    requests:
+      cpu: 0.2
+      memory: 1G
+    limits:
+      memory: 1G
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+
+  livenessProbe:
+    endpoint: "/actuator/health/liveness"
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+
+  readinessProbe:
+    endpoint: "/actuator/health/readiness"
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 2
+    successThreshold: 1
+
+  startupProbe:
+    endpoint: "/actuator/health/liveness"
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 15
+    successThreshold: 1
+
+  terminationGracePeriodSeconds: 30
+
+  serviceMonitor:
+    enabled: true
+    metricPath: /actuator/prometheus
+    interval: 150s
+
+  ingressInternal:
+    enabled: false
+    ingressClass: alb
+    groupName: "api"
+    scheme: "internal"
+    targetType: ip
+    sslPolicy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+    healthcheckPath: "/actuator/health"
+    healthcheckInterval: 5
+    healthcheckTimeout: 2
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+    hostname: ""
+    dnsdomain: "svc.local"
+    albAccessLogs:
+      enabled: false
+      s3BucketName: enabled-for-prod-only
+
+  ingressExternal:
+    enabled: false
+    ingressClass: alb
+    groupName: "api"
+    scheme: "internet-facing"
+    targetType: ip
+    sslPolicy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+    healthcheckPath: "/actuator/health"
+    healthcheckInterval: 5
+    healthcheckTimeout: 2
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+    hostname: ""
+    dnsdomain: "svc.local"
+    albAccessLogs:
+      enabled: true
+      s3BucketName: env-specific-s3-bucket
+
+migration:
+  enabled: false
+  nodeSelectorOverride: ""
+
+  # envs defines key-value map of environment variables
+  envs:
+
+  externalSecrets:
+    refreshInterval: 15m
+    cognitoEnabled: false
+    intDbEnabled: false
+    intTokenEnabled: false
+    kafkaEnabled: false
+    redisEnabled: false
+    rollbarEnabled: false
+
+    secretEnvs:
+
+    secretEnvsMap:
+
+  # Custom options that are passed to the JVM when it is launched via JAVA_OPTS env var
+  jvmOptions: ""
+
+cronJobs:
+  cronjob1:
+    enabled: false
+    schedule: "0 5 * * *"
+    command: ["make", "update_feeds"]
+    nodeSelectorOverride: ""
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 500M
+      limits:
+        memory: 1.5G
+
+    envs:
+
+    externalSecrets:
+      refreshInterval: 15m
+      intTokenEnabled: false
+      kafkaEnabled: false
+      redisEnabled: false
+      coreDbEnabled: false
+      intDbEnabled: false
+      rollbarEnabled: false
+      secretEnvs:
+      secretEnvsMap:

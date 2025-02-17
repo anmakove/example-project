@@ -1,0 +1,124 @@
+{{- $fullname := (include "app.fullname" .) }}
+{{- $envprefix := (include "app.envprefix" .) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname | quote }}
+  labels:
+{{ include "app.labels" . | indent 4 }}
+    {{- if .Values.app.datadog.enabled }}
+    tags.datadoghq.com/env: "{{ .Values.env }}" # Unified service tag - Pod Env tag
+    tags.datadoghq.com/service: {{ $fullname | quote }} # Unified service tag - Pod Service tag
+    tags.datadoghq.com/version: "{{ .Values.image.tag }}" # Unified service tag - Pod Version tag
+    {{- end }}
+  annotations:
+{{ include "app.deployment.annotations" . | indent 4 }}
+spec:
+  {{- if not .Values.api.autoscaling.enabled }}
+  replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ $fullname | quote }}
+  template:
+    metadata:
+      {{- if .Values.app.datadog.enabled }}
+      annotations:
+        admission.datadoghq.com/java-lib.version: "{{ .Values.app.datadog.libVersion }}"
+        {{- if and ($.Values.app.gitRepositoryUrl) ($.Values.app.gitCommitSHA) }}
+        ad.datadoghq.com/tags: '{"git.commit.sha": "{{ $.Values.app.gitCommitSHA }}", "git.repository_url": "{{ $.Values.app.gitRepositoryUrl }}"}'
+        {{- end }}
+      {{- end }}
+      labels:
+{{ include "app.labels" . | indent 8 }}
+        {{- if .Values.app.datadog.enabled }}
+        tags.datadoghq.com/env: "{{ .Values.env }}" # Unified service tag - Pod Env tag
+        tags.datadoghq.com/service: {{ $fullname | quote }} # Unified service tag - Pod Service tag
+        tags.datadoghq.com/version: "{{ .Values.image.tag }}" # Unified service tag - Pod Version tag
+        admission.datadoghq.com/enabled: "true"
+        {{- end }}
+    spec:
+      {{- if or (.Values.app.nodeSelector) (.Values.api.nodeSelectorOverride) }}
+      nodeSelector:
+        node.kubernetes.io/instance-group: {{ default .Values.app.nodeSelector .Values.api.nodeSelectorOverride }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{ $fullname | quote }}
+              topologyKey: topology.kubernetes.io/zone
+            weight: 100
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: "{{ include "app.serviceAccountName" . }}"
+      terminationGracePeriodSeconds: {{ .Values.api.terminationGracePeriodSeconds }}
+      containers:
+        - name: {{ $fullname | quote }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          {{- if .Values.api.jvmOptions }}
+          command: ["java"]
+          args: ["$(JAVA_OPTS)", "org.springframework.boot.loader.JarLauncher"]
+          {{- end }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          # Workaround for https://github.com/DataDog/helm-charts/issues/922
+          {{- if .Values.api.envs }}
+          {{- if .Values.api.envs.JAVA_TOOL_OPTIONS }}
+            - name: JAVA_TOOL_OPTIONS
+              value: "{{ .Values.api.envs.JAVA_TOOL_OPTIONS }}"
+          {{- end }}
+          {{- end }}
+          envFrom:
+            - secretRef:
+                name: "{{ $fullname }}-api-es"
+            - configMapRef:
+                name: "{{ $fullname }}-api"
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.service.targetPort }}
+              protocol: TCP
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep {{ .Values.api.terminationGracePeriodSeconds }}"]
+          {{- if .Values.api.resources }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: "{{ .Values.api.readinessProbe.endpoint }}"
+              port: {{ .Values.api.service.targetPort }}
+            periodSeconds: {{ .Values.api.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.readinessProbe.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: "{{ .Values.api.livenessProbe.endpoint }}"
+              port: {{ .Values.api.service.targetPort }}
+            periodSeconds: {{ .Values.api.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.livenessProbe.failureThreshold }}
+            successThreshold: {{ .Values.api.livenessProbe.successThreshold }}
+          startupProbe:
+            httpGet:
+              path: "{{ .Values.api.startupProbe.endpoint }}"
+              port: {{ .Values.api.service.targetPort }}
+            initialDelaySeconds: {{ .Values.api.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.api.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.api.startupProbe.failureThreshold }}
+            successThreshold: {{ .Values.api.startupProbe.successThreshold }}

@@ -1,0 +1,6 @@
+gh-app-id: 123456
+app-key: |
+    -----BEGIN RSA PRIVATE KEY-----
+    put_private_key_here
+    -----END RSA PRIVATE KEY-----
+gh-webhook-secret: somesecret

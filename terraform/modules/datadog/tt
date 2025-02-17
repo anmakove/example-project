@@ -1,0 +1,31 @@
+resource "datadog_integration_aws_account" "foo" {
+  account_tags   = ["aws_account:${var.account_id}", "aws_account_name:${var.account_name}", "env:${var.env}"]
+  aws_account_id = var.account_id
+  aws_partition  = "aws"
+
+  aws_regions {
+    include_only = var.available_aws_regions
+  }
+
+  auth_config {
+    aws_auth_config_role {
+      role_name = "DatadogAWSIntegrationRole"
+    }
+  }
+
+  metrics_config {
+    enabled                   = true
+    automute_enabled          = true
+    collect_cloudwatch_alarms = true
+    collect_custom_metrics    = true
+    namespace_filters {
+      include_only = [
+        "AWS/SQS",
+        "AWS/EC2"
+      ]
+    }
+  }
+  resources_config {
+    cloud_security_posture_management_collection = false
+  }
+}

@@ -1,0 +1,33 @@
+write-git-creds: true
+hide-prev-plan-comments: true
+gh-allow-mergeable-bypass-apply: true
+gh-team-allowlist: "Infrastructure:plan, Infrastructure:apply, Infrastructure:import"
+checkout-strategy: "merge"
+repos:
+  - id: "/.*infra/"
+    apply_requirements: [undiverged]
+    plan_requirements: [undiverged]
+    import_requirements: [undiverged]
+    workflow: terragrunt
+    allowed_overrides: [workflow]
+    allow_custom_workflows: false
+    pre_workflow_hooks:
+      - run: terragrunt-atlantis-config generate --output atlantis.yaml --autoplan --parallel=true
+        description: Generating configs
+
+workflows:
+  terragrunt:
+    plan:
+      steps:
+        - env:
+            name: TERRAGRUNT_TFPATH
+            command: 'echo "terraform${ATLANTIS_TERRAFORM_VERSION}"'
+        - run: terragrunt init
+        - run: terragrunt plan -input=false -out=$PLANFILE
+        - run: terragrunt show -json $PLANFILE > $SHOWFILE
+    apply:
+      steps:
+        - env:
+            name: TERRAGRUNT_TFPATH
+            command: echo "terraform${ATLANTIS_TERRAFORM_VERSION}"
+        - run: terragrunt apply -input=false $PLANFILE

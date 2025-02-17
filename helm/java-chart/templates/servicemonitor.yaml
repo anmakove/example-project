@@ -1,0 +1,22 @@
+{{- $fullname := (include "app.fullname" .) }}
+---
+{{- if .Values.api.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: "{{ $fullname }}"
+  labels:
+{{ include "app.labels" . | indent 4 }}    
+spec:
+  endpoints:
+  - port: http
+    path: {{ .Values.api.serviceMonitor.metricPath }}
+    interval: {{ .Values.api.serviceMonitor.interval }}
+  jobLabel: app.kubernetes.io/name
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app: {{ $fullname }}
+{{- end }}

@@ -1,0 +1,12 @@
+{{- if (and .Values.serviceAccount.create .Values.serviceAccount.clusterRole.create) }}
+{{- $rname := (include "app.clusterRoleName" .) }}
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ $rname }}
+  labels:
+{{ include "app.labels" . | indent 4 }}
+rules:
+{{ toYaml .Values.serviceAccount.clusterRole.rules | indent 2 }}
+{{- end }}
